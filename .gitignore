@@ -1,0 +1,32 @@
+# Ambiente e dependências locais
+.venv/
+.env
+.idea/
+.vscode/
+
+# Cache/artefatos de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Sistema/OS
+.DS_Store
+Thumbs.db
+
+# Dados e saídas volumosas
+data/processed/
+results/
+figures/
+
+# Modelos ou binários eventuais
+*.joblib
+*.pkl
