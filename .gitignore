@@ -3,6 +3,7 @@
 .env
 .idea/
 .vscode/
+.utils/
 
 # Cache/artefatos de Python
 __pycache__/

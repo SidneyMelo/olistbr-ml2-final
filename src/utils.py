@@ -7,7 +7,7 @@ Inclui:
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 import joblib
 import numpy as np
@@ -35,7 +35,7 @@ def set_global_seed(seed: int = 42) -> None:
         pass
 
 
-def save_model(model: Any, path: str | Path) -> None:
+def save_model(model: Any, path: Union[str, Path]) -> None:
     """
     Salva um modelo treinado em disco usando joblib.
 
@@ -43,7 +43,7 @@ def save_model(model: Any, path: str | Path) -> None:
     ----------
     model : Any
         Modelo treinado (sklearn, xgboost, etc.).
-    path : str | Path
+    path : Union[str, Path]
         Caminho para o arquivo .pkl ou .joblib.
     """
     path = Path(path)
@@ -51,13 +51,13 @@ def save_model(model: Any, path: str | Path) -> None:
     joblib.dump(model, path)
 
 
-def load_model(path: str | Path) -> Any:
+def load_model(path: Union[str, Path]) -> Any:
     """
     Carrega um modelo salvo em disco via joblib.
 
     Parameters
     ----------
-    path : str | Path
+    path : Union[str, Path]
 
     Returns
     -------

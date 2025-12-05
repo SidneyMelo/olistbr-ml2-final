@@ -78,7 +78,14 @@ def plot_review_distribution(reviews: pd.DataFrame, output_dir: Path) -> None:
         5: "#1a9850",
     }
     palette = [color_map.get(int(s), sns.color_palette()[0]) for s in order]
-    ax = sns.countplot(x="review_score", data=reviews, order=order, palette=palette)
+    ax = sns.countplot(
+        x="review_score",
+        data=reviews,
+        order=order,
+        palette=palette,
+        hue="review_score",
+        legend=False,
+    )
 
     total = len(reviews)
     mean_count = reviews["review_score"].value_counts().mean()
@@ -94,7 +101,7 @@ def plot_review_distribution(reviews: pd.DataFrame, output_dir: Path) -> None:
         )
 
     ax.axhline(mean_count, linestyle="--", color="gray", label="Média de avaliações por nota")
-    plt.title("Distribuição das notas de review  dados desbalanceados")
+    plt.title("Distribuição das notas de review - dados desbalanceados")
     plt.xlabel("Nota do cliente")
     plt.ylabel("Quantidade de avaliações")
     plt.legend()
@@ -294,7 +301,9 @@ def analyze_review_drivers(data: dict, top_n: int = 10, fig_dir: Optional[Path] 
         data=delay_stats,
         x="delayed",
         y="media",
+        hue="delayed",
         palette=["#4daf4a", "#e41a1c"],  # não atrasado (verde), atrasado (vermelho)
+        legend=False,
     )
     for i, row in delay_stats.iterrows():
         plt.text(i, row["media"] + 0.05, f"{row['media']:.1f}", ha="center", va="bottom", fontsize=10)
@@ -333,7 +342,14 @@ def analyze_review_drivers(data: dict, top_n: int = 10, fig_dir: Optional[Path] 
         norm = plt.Normalize(top_cats["pct_baixa"].min(), top_cats["pct_baixa"].max())
         colors = [cmap(norm(v)) for v in top_cats["pct_baixa"]]
 
-        sns.barplot(data=top_cats, y="product_category_name", x="pct_baixa", palette=colors)
+        sns.barplot(
+            data=top_cats,
+            y="product_category_name",
+            x="pct_baixa",
+            hue="product_category_name",
+            palette=colors,
+            legend=False,
+        )
         plt.xlabel("Pct avaliacoes ruins (nota <= 2) (%)")
         plt.ylabel("Categoria")
         plt.title("Categorias com maior taxa de avaliacoes ruins")
@@ -372,7 +388,14 @@ def analyze_review_drivers(data: dict, top_n: int = 10, fig_dir: Optional[Path] 
         cmap = sns.color_palette("Reds", as_cmap=True)
         norm = plt.Normalize(top_states["pct_baixa"].min(), top_states["pct_baixa"].max())
         colors = [cmap(norm(v)) for v in top_states["pct_baixa"]]
-        sns.barplot(data=top_states, y="customer_state", x="pct_baixa", palette=colors)
+        sns.barplot(
+            data=top_states,
+            y="customer_state",
+            x="pct_baixa",
+            hue="customer_state",
+            palette=colors,
+            legend=False,
+        )
         plt.xlabel("Pct avaliacoes ruins (nota <= 2) (%)")
         plt.ylabel("Estado")
         plt.title("Quais estados têm maior taxa de notas ruins?")

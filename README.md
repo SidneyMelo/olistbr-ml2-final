@@ -1,73 +1,285 @@
-# Olist - Modelagem de Reviews
+# 🛒 Análise de Satisfação no E-Commerce Brasileiro
 
-Projeto de ciencia de dados aplicado ao dataset publico da Olist (Kaggle). O foco e explicar a satisfacao do cliente (review_score) por meio de:
-- Analise exploratoria com graficos.
-- Pipeline de pre-processamento e criacao de targets.
-- Modelos supervisionados para classificar reviews boas vs ruins.
-- Experimento de clustering em pedidos/clientes.
-- Regressao para prever a nota continua.
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.0+-FF4B4B.svg)](https://streamlit.io)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## Dataset
-- Nome: Olist Brazilian E-Commerce Public Dataset
-- Origem: [Kaggle - Brazilian E-Commerce Public Dataset](https://www.kaggle.com/code/thuandao/brazilian-e-commerce-analysis)
+Projeto de ciência de dados que investiga os determinantes da satisfação do cliente no e-commerce brasileiro, utilizando o dataset público da Olist. O objetivo é identificar padrões e construir modelos preditivos para entender e antecipar a experiência do cliente.
 
-## Problema e perguntas de pesquisa
-Objetivo: analisar os fatores que impactam a satisfacao do cliente nas compras realizadas em e-commerce, utilizando as avaliacoes registradas e os dados dos pedidos do dataset Olist.
+## 📊 Sobre o Dataset
 
-Perguntas que o projeto busca responder:
-- Quais caracteristicas dos pedidos estao relacionadas a avaliacoes altas ou baixas (review_score)?
-- O tempo entre compra e entrega (order_purchase_timestamp, order_delivered_customer_date) afeta a nota do review?
-- Existem categorias de produtos (product_category_name) com maior insatisfacao dos clientes?
-- Clientes de determinadas regioes (customer_state, customer_city) avaliam de maneira mais positiva ou negativa?
+**Dataset:** [Olist Brazilian E-Commerce Public Dataset](https://www.kaggle.com/code/thuandao/brazilian-e-commerce-analysis)
 
-## Estrutura do repositorio
-- `data/`: CSVs brutos do Kaggle Olist e saidas processadas em `data/processed/`.
-- `figures/`: graficos da analise exploratoria e cortes por categoria/estado.
-- `results/`: artefatos dos modelos (JSON, CSV e PNG).
-- `src/`: modulos reutilizaveis (pre-processamento, feature engineering, modelos, clustering, utils).
-- `01_data_overview.py ... 05_regression_review_score.py`: scripts de ponta a ponta.
+O dataset contém informações reais de pedidos realizados entre 2016 e 2018 na Olist, marketplace brasileiro que conecta pequenos e médios negócios a diversos canais de venda. Inclui dados sobre:
+- 🛍️ Pedidos e seus status
+- ⭐ Avaliações dos clientes (review_score)
+- 📦 Produtos e categorias
+- 🚚 Informações de entrega
+- 💰 Valores e formas de pagamento
+- 📍 Localização de clientes e vendedores
 
-## Requisitos
-- Python >= 3.10
-- Instale dependencias: `pip install -r requirements.txt`
-- Todos os CSVs do dataset Olist devem estar em `data/` com os nomes originais.
+---
 
-## Como rodar
-1) Analise exploratoria  
-`python 01_data_overview.py`  
-Saidas em `figures/` (distribuicao de review_score, pedidos por mes, atraso vs nota) e tabelas auxiliares em `figures/analysis/`.
+## 🎯 Objetivos e Perguntas de Pesquisa
 
-2) Pre-processamento e base de modelagem  
-`python 02_preprocessing.py`  
-Gera `data/processed/olist_model_dataset.csv` (remove cancelados, adiciona features de tempo, agregacoes por pedido e targets: review_binary, review_positive, review_negative).
+### Objetivo Principal
+Analisar os fatores que impactam a satisfação do cliente em compras online, utilizando técnicas de machine learning e análise exploratória de dados.
 
-3) Classificacao supervisionada (target = review_binary: 1 >= 4, 0 <= 2, neutros dropados)  
-`python 03_supervised_models.py`  
-Treina Naive Bayes, Regressao Logistica, SVM linear, Random Forest e XGBoost (se instalado). Produz:
-- `results/supervised_results.json`
-- `results/accuracy_barplot.png`
-- `results/confusion_matrix_<melhor>.png`, `class_report_<melhor>.csv`, `precision_recall_<melhor>.png`  
-Resultado atual: acc ~0.89 (Random Forest / XGBoost), com melhor recall para a classe positiva.
+### Perguntas de Pesquisa
+1. **Quais características** dos pedidos estão mais relacionadas a avaliações altas ou baixas?
+2. **O tempo de entrega** (prazo estimado vs. real) afeta significativamente a nota do review?
+3. **Existem categorias de produtos** com maior tendência a gerar insatisfação?
+4. **A localização geográfica** do cliente influencia na avaliação dos pedidos?
+5. **É possível prever** a satisfação do cliente antes da avaliação ser registrada?
 
-4) Clustering (K-Means, n_clusters=3)  
-`python 04_clustering.py`  
-Usa features numericas (preco, frete, itens, tempo/atraso de entrega). Saidas:
-- `data/processed/olist_model_dataset_with_clusters.csv` (coluna cluster)
-- `results/clustering/cluster_summary.csv`, `review_score_by_cluster.png`, `boxplots_features_by_cluster.png`
+---
 
-5) Regressao da nota continua  
-`python 05_regression_review_score.py`  
-Treina Regressao Linear e Ridge usando as mesmas features supervisionadas. Saidas:
-- `results/regression/regression_results.json` (RMSE ~1.20, R2 ~0.19)
-- Graficos de paridade e residuos em `results/regression/*.png`
+## 🏗️ Estrutura do Projeto
 
-## Insights e artefatos prontos
-- Categorias com maior percentual de notas <= 2 (`figures/analysis/categories_most_negative_top.csv`): destaque para fashion_roupa_masculina, moveis_escritorio, telefonia_fixa, audio.
-- Estados com medias mais baixas (`figures/analysis/states_most_negative_top.csv`): AL, MA, SE, PA aparecem com maior % de reviews ruins.
-- Impacto de atraso na entrega: graficos em `figures/analysis/review_score_by_delay.png` e `figures/delivery_delay_by_review_score.png`.
-- Volume historico de pedidos em `figures/orders_per_month.png`.
+```
+olist-analysis/
+├── data/
+│   ├── *.csv                          # CSVs brutos do Kaggle
+│   └── processed/                     # Dados processados
+├── figures/
+│   └── analysis/                      # Gráficos e tabelas da EDA
+├── results/
+│   ├── classification/                # Resultados dos modelos de classificação
+│   ├── clustering/                    # Análise de clusters
+│   └── regression/                    # Modelos de regressão
+├── src/
+│   ├── preprocessing.py               # Pipeline de pré-processamento
+│   ├── feature_engineering.py         # Criação de features
+│   ├── models.py                      # Definição dos modelos
+│   ├── clustering.py                  # Algoritmos de clustering
+│   └── utils.py                       # Funções auxiliares
+├── 01_data_overview.py                # Script de análise exploratória
+├── 02_preprocessing.py                # Script de preparação dos dados
+├── 03_supervised_models.py            # Treinamento de modelos supervisionados
+├── 04_clustering.py                   # Análise de agrupamentos
+├── 05_regression_review_score.py      # Modelos de regressão
+├── app.py                             # Dashboard Streamlit
+└── requirements.txt                   # Dependências do projeto
+```
 
-## Notas
-- Listas de features numericas/categoricas ficam em `src/feature_engineering.py`; ajuste aqui se quiser experimentar variaveis novas.
-- Clustering usa padronizacao interna (StandardScaler) antes do K-Means.
-- XGBoost e opcional; se a lib nao estiver instalada o script segue sem ele.
+---
+
+## 🚀 Como Usar
+
+### Pré-requisitos
+
+- Python 3.10 ou superior
+- Todos os arquivos CSV do dataset Olist baixados do Kaggle
+
+### Instalação
+
+```bash
+# Clone o repositório
+git clone <url-do-repositorio>
+cd olist-analysis
+
+# Crie um ambiente virtual (recomendado)
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# ou
+venv\Scripts\activate  # Windows
+
+# Instale as dependências
+pip install -r requirements.txt
+```
+
+### Pipeline de Execução
+
+#### 1️⃣ Análise Exploratória de Dados (EDA)
+```bash
+python 01_data_overview.py
+```
+**Saídas:**
+- Distribuição de review_score
+- Evolução temporal de pedidos
+- Relação entre atraso na entrega e avaliação
+- Análise por categoria e estado
+
+📁 Resultados em: `figures/` e `figures/analysis/`
+
+---
+
+#### 2️⃣ Pré-processamento
+```bash
+python 02_preprocessing.py
+```
+**Processamento:**
+- Remove pedidos cancelados
+- Calcula features temporais (tempo de entrega, atrasos)
+- Cria agregações por pedido
+- Gera variáveis target:
+  - `review_binary`: Bom (≥4) vs. Ruim (≤2)
+  - `review_positive`: Review ≥4
+  - `review_negative`: Review ≤2
+
+📁 Saída: `data/processed/olist_model_dataset.csv`
+
+---
+
+#### 3️⃣ Modelos de Classificação
+```bash
+python 03_supervised_models.py
+```
+**Modelos Treinados:**
+- Naive Bayes
+- Regressão Logística
+- SVM Linear
+- Random Forest
+- XGBoost (opcional)
+
+**Avaliação:**
+- Métricas holdout e cross-validation (5-fold)
+- Matriz de confusão
+- Importância de features
+- Comparação de performance
+
+📁 Resultados em: `results/classification/`
+
+**Performance Atual:**
+- ✅ Acurácia: ~89% (Random Forest/XGBoost)
+- ✅ Recall classe negativa: Melhor em SVM/LogReg
+
+---
+
+#### 4️⃣ Análise de Clusters
+```bash
+python 04_clustering.py
+```
+**Método:** K-Means (k=3) com StandardScaler
+
+**Features utilizadas:**
+- Preço total
+- Valor do frete
+- Número de itens
+- Tempo de entrega
+- Dias de atraso
+
+**Clusters Identificados:**
+1. **Baixo Valor** - Entregas rápidas, 1 produto
+2. **Alto Valor** - 1 produto, entregas adiantadas
+3. **Multi-produtos** - Volume médio
+
+📁 Saída: `data/processed/olist_model_dataset_with_clusters.csv`
+
+---
+
+#### 5️⃣ Regressão para Previsão de Nota
+```bash
+python 05_regression_review_score.py
+```
+**Modelos:**
+- Regressão Linear
+- Ridge Regression
+
+**Performance:**
+- RMSE: ~1.23
+- R²: ~0.15
+- MAE: ~0.95
+
+📁 Resultados em: `results/regression/`
+
+---
+
+#### 6️⃣ Dashboard Interativo
+```bash
+streamlit run app.py
+```
+
+**Funcionalidades:**
+- 📊 Visualização de métricas dos modelos
+- 🎯 Predição interativa de satisfação
+- 📈 Análise exploratória interativa
+- 🔍 Comparação entre modelos
+- 🎨 Gráficos de importância de features
+
+Acesse em: `http://localhost:8501`
+
+---
+
+## 💡 Principais Insights
+
+### 📉 Categorias com Maior Insatisfação
+- Fashion (roupa masculina)
+- Móveis de escritório
+- Telefonia fixa
+- Equipamentos de áudio
+
+📁 Detalhes: `figures/analysis/categories_most_negative_top.csv`
+
+### 🗺️ Estados com Menores Avaliações
+- Alagoas (AL)
+- Maranhão (MA)
+- Sergipe (SE)
+- Pará (PA)
+
+📁 Detalhes: `figures/analysis/states_most_negative_top.csv`
+
+### ⏰ Impacto do Atraso na Entrega
+Pedidos atrasados apresentam correlação forte com avaliações negativas. Visualizações demonstram queda acentuada na satisfação conforme aumenta o atraso.
+
+📁 Gráficos: `figures/analysis/review_score_by_delay.png`
+
+---
+
+## 🛠️ Customização
+
+### Adicionar Novas Features
+Edite `src/feature_engineering.py` para incluir novas variáveis numéricas ou categóricas.
+
+### Ajustar Modelos
+Modifique hiperparâmetros em `src/models.py` ou adicione novos algoritmos.
+
+### Configurar Clustering
+Altere o número de clusters ou método em `04_clustering.py`.
+
+---
+
+## 📋 Requisitos Técnicos
+
+### Dependências Principais
+- pandas >= 1.5.0
+- numpy >= 1.23.0
+- scikit-learn >= 1.2.0
+- matplotlib >= 3.6.0
+- seaborn >= 0.12.0
+- streamlit >= 1.20.0
+- xgboost >= 1.7.0 (opcional)
+
+📄 Lista completa: `requirements.txt`
+
+---
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas! Sinta-se à vontade para:
+- Reportar bugs
+- Sugerir novas features
+- Melhorar a documentação
+- Submeter pull requests
+
+---
+
+## 📝 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
+
+---
+
+## 📧 Contato
+
+Para dúvidas ou sugestões, abra uma issue no repositório.
+
+---
+
+## 🙏 Agradecimentos
+
+- **Olist** por disponibilizar o dataset público
+- **Kaggle** por hospedar e facilitar o acesso aos dados
+- Comunidade open-source pelas ferramentas utilizadas
+
+---

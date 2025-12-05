@@ -40,6 +40,8 @@ def main() -> None:
     DATA_FILE = Path("data/processed/olist_model_dataset.csv")
     OUT_DATA_FILE = Path("data/processed/olist_model_dataset_with_clusters.csv")
     RESULTS_DIR = Path("results/clustering")
+    METRICS_DIR = RESULTS_DIR / "metrics"
+    PLOTS_DIR = RESULTS_DIR / "plots"
 
     if not DATA_FILE.exists():
         raise SystemExit(
@@ -107,8 +109,9 @@ def main() -> None:
         .agg(["mean", "median", "std", "min", "max", "count"])
     )
 
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    summary_file = RESULTS_DIR / "cluster_summary.csv"
+    METRICS_DIR.mkdir(parents=True, exist_ok=True)
+    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+    summary_file = METRICS_DIR / "cluster_summary.csv"
     cluster_summary.to_csv(summary_file)
     print("Resumo por cluster salvo em:", summary_file.resolve())
 
@@ -118,22 +121,66 @@ def main() -> None:
     if "review_score" in df.columns:
         print("\n📈 Gerando gráfico de média de review_score por cluster...")
 
-        review_by_cluster = (
-            df.dropna(subset=["cluster"])
-            .groupby("cluster")["review_score"]
+        # Nomes explicativos (podem variar conforme a rodada, mas seguem o perfil médio observado):
+        # 0: Ticket médio-alto, 1 produto, entrega adiantada -> "Alto Valor (1 produto, adiantado)"
+        # 1: Ticket baixo, 1 produto, entrega adiantada, nota mais alta -> "Baixo Valor (adiantado, 1 produto)"
+        # 2: Ticket médio-alto, múltiplos produtos, nota mais baixa -> "Multi-produtos (médio)"
+        cluster_names = {
+            0: "Alto Valor (1 produto, adiantado)",
+            1: "Baixo Valor (adiantado, 1 produto)",
+            2: "Multi-produtos (médio)",
+        }
+        
+        # Criar coluna com nomes
+        df_plot = df.dropna(subset=["cluster", "review_score"]).copy()
+        df_plot["cluster_name"] = df_plot["cluster"].map(cluster_names)
+
+        # 2. Usar Cores para Distinguir
+        palette = {
+            "Alto Valor (1 produto, adiantado)": "#95a5a6",              # Cinza
+            "Baixo Valor (adiantado, 1 produto)": "#2ecc71",             # Verde
+            "Multi-produtos (médio)": "#e67e22",                         # Laranja
+        }
+
+        plt.figure(figsize=(8, 5))
+        
+        # 5. Mostrar a Variabilidade (Barra de Erro)
+        # Usando o dataset completo, o seaborn calcula o IC (linha preta)
+        order_plot = (
+            df_plot.groupby("cluster_name")["review_score"]
             .mean()
-            .reset_index()
+            .sort_values(ascending=False)
+            .index.tolist()
         )
 
-        plt.figure()
-        sns.barplot(data=review_by_cluster, x="cluster", y="review_score")
-        plt.title("Média de review_score por cluster")
-        plt.xlabel("Cluster")
-        plt.ylabel("Média de review_score")
-        plt.ylim(1, 5)
+        ax = sns.barplot(
+            data=df_plot,
+            x="cluster_name",
+            y="review_score",
+            hue="cluster_name", # Fix FutureWarning
+            palette=palette,
+            order=order_plot, # ordem dinâmica pela média da nota
+            capsize=0.1,
+            legend=False # Fix FutureWarning
+        )
+
+        # 4. Adicionar Linha de Média Global
+        global_mean = df_plot["review_score"].mean()
+        plt.axhline(y=global_mean, color="black", linestyle="--", label=f"Média Global ({global_mean:.2f})")
+        plt.legend()
+
+        # 1. Adicionar Rótulos de Valor (Data Labels)
+        # Como estamos usando barplot com agregação, precisamos pegar os valores das barras
+        for container in ax.containers:
+            ax.bar_label(container, fmt="%.2f", padding=3, fontsize=10, fontweight="bold")
+
+        plt.title("Média de Nota de Avaliação por Cluster (com IC 95%)", fontsize=14)
+        plt.xlabel("Cluster", fontsize=12)
+        plt.ylabel("Nota de Avaliação", fontsize=12)
+        plt.ylim(1, 5.5) # Espaço extra para os labels
         plt.tight_layout()
 
-        plot_file = RESULTS_DIR / "review_score_by_cluster.png"
+        plot_file = PLOTS_DIR / "review_score_by_cluster.png"
         plt.savefig(plot_file, dpi=120)
         plt.close()
         print("Gráfico salvo em:", plot_file.resolve())
@@ -151,11 +198,25 @@ def main() -> None:
         "delivery_time_days",
         "delivery_delay_days",
     ]
+    
+    # Tradução dos títulos
+    feature_titles = {
+        "total_items_price": "Preço Total (R$)",
+        "total_freight_value": "Frete Total (R$)",
+        "payment_value": "Valor Pago (R$)",
+        "n_items": "Qtd. Itens",
+        "delivery_time_days": "Tempo de Entrega (dias)",
+        "delivery_delay_days": "Atraso (dias)",
+    }
+
     features_for_plot = [c for c in features_for_plot if c in df.columns]
 
-    df_plot = df.dropna(subset=["cluster"] + features_for_plot).copy()
-    df_plot["cluster"] = df_plot["cluster"].astype(int)
-
+    # Reutilizar df_plot que já tem cluster_name (criado no passo anterior)
+    # Se por acaso não tiver rodado o passo 5 (review_score), recriar aqui:
+    if "cluster_name" not in df_plot.columns:
+         df_plot = df.dropna(subset=["cluster"] + features_for_plot).copy()
+         df_plot["cluster_name"] = df_plot["cluster"].map(cluster_names)
+    
     # Fazer um boxplot por feature, todos no mesmo figure usando subplots
     n_features = len(features_for_plot)
     if n_features > 0:
@@ -165,22 +226,36 @@ def main() -> None:
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, 4 * n_rows))
         axes = axes.flatten()
 
+        order_plot = (
+            df_plot.groupby("cluster_name")["review_score"].mean().sort_values(ascending=False).index.tolist()
+            if "review_score" in df_plot.columns else list(cluster_names.values())
+        )
+
         for i, feature in enumerate(features_for_plot):
             ax = axes[i]
             sns.boxplot(
                 data=df_plot,
-                x="cluster",
+                x="cluster_name",
                 y=feature,
+                hue="cluster_name",
+                palette=palette,
+                order=order_plot,
+                showfliers=False, # Remover outliers visualmente
                 ax=ax,
+                dodge=False,
+                legend=False,
             )
-            ax.set_title(f"{feature} por cluster")
+            ax.set_title(feature_titles.get(feature, feature), fontsize=12)
+            ax.set_xlabel("Cluster")
+            ax.set_ylabel("")
+            # Legenda removida para evitar warnings; cores seguem o mapping.
 
         # Esconder eixos sobrando
         for j in range(i + 1, len(axes)):
             axes[j].set_visible(False)
 
         plt.tight_layout()
-        boxplot_file = RESULTS_DIR / "boxplots_features_by_cluster.png"
+        boxplot_file = PLOTS_DIR / "boxplots_features_by_cluster.png"
         plt.savefig(boxplot_file, dpi=120)
         plt.close()
         print("Boxplots salvos em:", boxplot_file.resolve())

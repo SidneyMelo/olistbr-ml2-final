@@ -11,10 +11,11 @@ from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, StandardScaler, RobustScaler
 
 
 def add_targets(df: pd.DataFrame) -> pd.DataFrame:
@@ -74,15 +75,31 @@ def get_supervised_feature_lists() -> Tuple[List[str], List[str]]:
     ]
 
     categorical_features = [
-        "order_status",
         "payment_type",
         "customer_state",
-        "customer_city",
-        "product_category_name",
         "product_category_name_english",
     ]
 
     return numeric_features, categorical_features
+
+
+class QuantileClipper(BaseEstimator, TransformerMixin):
+    """
+    Clipa valores extremos por feature usando quantis, ajudando na estabilidade numérica.
+    Definida no escopo do módulo para permitir pickle dos pipelines.
+    """
+
+    def __init__(self, lower: float = 0.01, upper: float = 0.99):
+        self.lower = lower
+        self.upper = upper
+
+    def fit(self, X, y=None):
+        self.lower_ = np.nanquantile(X, self.lower, axis=0)
+        self.upper_ = np.nanquantile(X, self.upper, axis=0)
+        return self
+
+    def transform(self, X):
+        return np.clip(X, self.lower_, self.upper_)
 
 
 def build_preprocessor(
@@ -103,10 +120,12 @@ def build_preprocessor(
     -------
     ColumnTransformer
     """
+
     numeric_transformer = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler()),
+            ("clipper", QuantileClipper(lower=0.01, upper=0.99)),
+            ("scaler", MinMaxScaler()),
         ]
     )
     def _onehot_dense() -> OneHotEncoder:
@@ -200,6 +219,20 @@ def prepare_clustering_features(df: pd.DataFrame) -> pd.DataFrame:
     cols = [c for c in cols if c in df.columns]
 
     cluster_df = df[cols].copy()
+    # Garantir tipo numérico
+    cluster_df = cluster_df.apply(pd.to_numeric, errors="coerce")
+    # Tratar inf/-inf
+    cluster_df = cluster_df.replace([np.inf, -np.inf], np.nan)
+    # Log1p em colunas monetárias para reduzir magnitude
+    for col in ["total_items_price", "total_freight_value", "payment_value"]:
+        if col in cluster_df.columns:
+            cluster_df[col] = np.log1p(cluster_df[col].clip(lower=0))
+    # Winsorização leve para evitar overflow no KMeans
+    q_low = cluster_df.quantile(0.01)
+    q_high = cluster_df.quantile(0.99)
+    cluster_df = cluster_df.clip(lower=q_low, upper=q_high, axis=1)
+    # Manter apenas linhas totalmente finitas
     cluster_df = cluster_df.dropna()
+    cluster_df = cluster_df[np.isfinite(cluster_df).all(axis=1)]
 
     return cluster_df

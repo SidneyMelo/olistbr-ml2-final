@@ -9,12 +9,12 @@ Responsável por:
 """
 
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List, Optional, Union
 
 import pandas as pd
 
 
-def load_olist_data(base_path: str | Path) -> Dict[str, pd.DataFrame]:
+def load_olist_data(base_path: Union[str, Path]) -> Dict[str, pd.DataFrame]:
     """
     Carrega todos os arquivos CSV do dataset Olist a partir de uma pasta base.
 
@@ -31,7 +31,7 @@ def load_olist_data(base_path: str | Path) -> Dict[str, pd.DataFrame]:
 
     Parameters
     ----------
-    base_path : str | Path
+    base_path : Union[str, Path]
         Caminho da pasta contendo os CSVs.
 
     Returns
@@ -41,7 +41,7 @@ def load_olist_data(base_path: str | Path) -> Dict[str, pd.DataFrame]:
     """
     base_path = Path(base_path)
 
-    def _read_csv(name: str, parse_dates: list[str] | None = None) -> pd.DataFrame:
+    def _read_csv(name: str, parse_dates: Optional[List[str]] = None) -> pd.DataFrame:
         fp = base_path / name
         if parse_dates:
             return pd.read_csv(fp, parse_dates=parse_dates)
@@ -219,7 +219,7 @@ def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def preprocess_base(
-    base_path: str | Path,
+    base_path: Union[str, Path],
     drop_canceled: bool = True,
 ) -> pd.DataFrame:
     """
@@ -230,7 +230,7 @@ def preprocess_base(
 
     Parameters
     ----------
-    base_path : str | Path
+    base_path : Union[str, Path]
         Caminho para a pasta com csvs.
     drop_canceled : bool, default=True
         Remove pedidos cancelados.

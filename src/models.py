@@ -11,12 +11,14 @@ Implementa funções para:
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
-from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression
+from sklearn.preprocessing import FunctionTransformer
+from sklearn.feature_selection import VarianceThreshold
+from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression, SGDClassifier, SGDRegressor
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -35,6 +37,15 @@ try:
     HAS_XGBOOST = True
 except ImportError:
     HAS_XGBOOST = False
+
+def _stabilize_nb(X):
+    # Clip para evitar overflow/underflow em NB
+    return np.clip(np.nan_to_num(X, copy=False, posinf=0, neginf=0), -15, 15)
+
+
+def _stabilize_logreg(X):
+    # Clip para evitar overflow/underflow no SGDClassifier
+    return np.clip(np.nan_to_num(X, copy=False, posinf=0, neginf=0), -20, 20)
 
 
 @dataclass
@@ -85,6 +96,8 @@ def train_naive_bayes_classifier(
     preprocessor: ColumnTransformer,
     X_train: pd.DataFrame,
     y_train: pd.Series,
+    var_smoothing: float = 1e-4,
+    variance_threshold: float = 1e-4,
 ) -> Pipeline:
     """
     Treina um classificador Naive Bayes (Gaussian) em pipeline com preprocessor.
@@ -99,14 +112,30 @@ def train_naive_bayes_classifier(
     -------
     Pipeline
     """
-    clf = GaussianNB()
+    clf = GaussianNB(var_smoothing=var_smoothing)
+    stabilizer = FunctionTransformer(
+        _stabilize_nb,
+        feature_names_out="one-to-one",
+    )
     model = Pipeline(
         steps=[
             ("preprocessor", preprocessor),
+            ("stabilizer", stabilizer),
+            ("var_thresh", VarianceThreshold(threshold=variance_threshold)),
             ("clf", clf),
         ]
     )
     model.fit(X_train, y_train)
+    # Evita divisao por zero em atributos com variancia zero por classe
+    try:
+        nb = model.named_steps["clf"]
+        if hasattr(nb, "sigma_"):
+            nb.sigma_ = np.maximum(nb.sigma_, var_smoothing)
+        if hasattr(nb, "var_"):
+            nb.var_ = np.maximum(nb.var_, var_smoothing)
+    except Exception:
+        # se atributos nao existirem, segue sem ajuste
+        pass
     return model
 
 
@@ -114,6 +143,9 @@ def train_logistic_regression_classifier(
     preprocessor: ColumnTransformer,
     X_train: pd.DataFrame,
     y_train: pd.Series,
+    C: float = 0.5,
+    max_iter: int = 2000,
+    class_weight: Optional[Union[Dict, str]] = None,
 ) -> Pipeline:
     """
     Treina um classificador de Regressão Logística (para comparação com NB e SVM).
@@ -128,13 +160,27 @@ def train_logistic_regression_classifier(
     -------
     Pipeline
     """
-    clf = LogisticRegression(
-        max_iter=1000,
+    clf = SGDClassifier(
+        loss="log_loss",
+        penalty="l2",
+        alpha=0.001,
+        max_iter=max_iter,
+        tol=1e-3,
+        learning_rate="adaptive",
+        eta0=0.01,
+        random_state=42,
         n_jobs=-1,
+        class_weight=class_weight,
+    )
+
+    stabilizer = FunctionTransformer(
+        _stabilize_logreg,
+        feature_names_out="one-to-one",
     )
     model = Pipeline(
         steps=[
             ("preprocessor", preprocessor),
+            ("stabilizer", stabilizer),
             ("clf", clf),
         ]
     )
@@ -148,7 +194,8 @@ def train_svm_classifier(
     y_train: pd.Series,
     kernel: str = "rbf",
     C: float = 1.0,
-    gamma: str | float = "scale",
+    gamma: Union[str, float] = "scale",
+    class_weight: Optional[Union[Dict, str]] = None,
 ) -> Pipeline:
     """
     Treina um classificador SVM em pipeline.
@@ -160,13 +207,13 @@ def train_svm_classifier(
     y_train : pd.Series
     kernel : str
     C : float
-    gamma : str | float
+    gamma : str or float
 
     Returns
     -------
     Pipeline
     """
-    clf = SVC(kernel=kernel, C=C, gamma=gamma)
+    clf = SVC(kernel=kernel, C=C, gamma=gamma, class_weight=class_weight)
     model = Pipeline(
         steps=[
             ("preprocessor", preprocessor),
@@ -219,13 +266,13 @@ def train_xgboost_classifier(
     X_train: pd.DataFrame,
     y_train: pd.Series,
     random_state: int = 42,
-) -> Pipeline | None:
+) -> Optional[Pipeline]:
     """
     Treina um XGBoostClassifier, se a biblioteca estiver instalada.
 
     Returns
     -------
-    Pipeline | None
+    Optional[Pipeline]
         Retorna None se xgboost não estiver disponível.
     """
     if not HAS_XGBOOST:
@@ -313,9 +360,26 @@ def train_linear_regression(
     Pipeline
     """
     if ridge:
-        reg = Ridge(alpha=alpha)
+        reg = SGDRegressor(
+            loss="squared_error",
+            penalty="l2",
+            alpha=0.001,
+            learning_rate="adaptive",
+            eta0=0.01,
+            max_iter=2000,
+            tol=1e-3,
+            random_state=42,
+        )
     else:
-        reg = LinearRegression()
+        reg = SGDRegressor(
+            loss="squared_error",
+            penalty=None,
+            learning_rate="adaptive",
+            eta0=0.01,
+            max_iter=2000,
+            tol=1e-3,
+            random_state=42,
+        )
 
     model = Pipeline(
         steps=[
@@ -333,7 +397,7 @@ def evaluate_regression(
     y_test: pd.Series,
 ) -> Dict[str, float]:
     """
-    Avalia um modelo de regressão usando RMSE e R².
+    Avalia um modelo de regressão usando MAE, RMSE e R².
 
     Parameters
     ----------
@@ -346,6 +410,7 @@ def evaluate_regression(
     dict
     """
     y_pred = model.predict(X_test)
+    mae = np.mean(np.abs(y_test - y_pred))
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     # R²
     ss_res = np.sum((y_test - y_pred) ** 2)
@@ -353,6 +418,7 @@ def evaluate_regression(
     r2 = 1 - ss_res / ss_tot if ss_tot != 0 else 0.0
 
     return {
+        "mae": mae,
         "rmse": rmse,
         "r2": r2,
     }

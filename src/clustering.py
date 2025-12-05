@@ -75,10 +75,27 @@ def fit_kmeans(
     -------
     KMeans
     """
+    # Garantir que não há valores não finitos
+    X = X.replace([np.inf, -np.inf], np.nan).dropna()
+    X = X[np.isfinite(X).all(axis=1)]
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_scaled = scaler.fit_transform(X.astype(float))
+    # Substituir eventuais NaN/inf pós-escala por 0 para evitar overflow
+    X_scaled = np.nan_to_num(X_scaled, nan=0.0, posinf=0.0, neginf=0.0)
+    if not np.isfinite(X_scaled).all():
+        X_scaled[~np.isfinite(X_scaled)] = 0.0
+    # Clipping extra para evitar overflow em distância
+    X_scaled = np.clip(X_scaled, -1e6, 1e6)
 
-    kmeans = KMeans(n_clusters=n_clusters, random_state=random_state, n_init="auto")
+    # Usar init="random" e algorithm="lloyd" para evitar RuntimeWarnings (overflow/div by zero)
+    # observados com k-means++ em algumas arquiteturas/versões do sklearn.
+    kmeans = KMeans(
+        n_clusters=n_clusters, 
+        random_state=random_state, 
+        n_init=10, 
+        init="random", 
+        algorithm="lloyd"
+    )
     kmeans.fit(X_scaled)
 
     # Guardar scaler dentro de atributo customizado (para usar depois)
