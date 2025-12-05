@@ -66,7 +66,7 @@ Com base nessas questões, o estudo combina análises exploratórias, técnicas 
 \section{Base de dados}
 
 \begin{itemize}
-\item \textbf{Origem}: conjunto Olist (Kaggle \cite{kaggle-olist}), com tabelas de pedidos, itens, reviews, clientes, produtos e pagamentos.
+\item \textbf{Origem}: conjunto Olist (Kaggle \cite{kaggle-olist}) contendo 112.650 registros e 47 variáveis inicialmente, distribuídos em 9 tabelas relacionais (pedidos, itens, reviews, clientes, produtos, pagamentos, vendedores e geolocalização), reduzidos para 98.068 registros e 34 features após pré-processamento.
   \item \textbf{Consolidação}: a função \texttt{preprocess\_base} (\texttt{src/preprocessing.py}) gera um \emph{dataframe} por pedido, remove cancelados, agrega itens/pagamentos e traduz categorias.
   \item \textbf{Targets}: a função \texttt{add\_targets} (\texttt{src/feature\_engineering.py}) cria \texttt{review\_binary}, \texttt{review\_positive} e \texttt{review\_negative}.
 \end{itemize}
@@ -128,8 +128,8 @@ Com base nessas questões, o estudo combina análises exploratórias, técnicas 
 \section{Trabalhos relacionados}
 
 \begin{itemize}
-  \item Estudos de previsão de satisfação em e-commerce têm utilizado principalmente modelos como \emph{random forest} e \emph{gradient boosting}, em dados de avaliações e atributos de pedidos, com resultados competitivos em métricas de classificação \cite{zaghloul2024}.
-  \item Abordagens para desbalanceamento incluem reamostragem, ajuste de \emph{threshold} e penalização de classe, alinhadas ao que exploramos aqui (pesos de classe e otimização por \emph{recall}).
+  \item Estudos de previsão de satisfação em e-commerce têm utilizado principalmente modelos como \emph{random forest} e \emph{gradient boosting}, em dados de avaliações e atributos de pedidos, com resultados competitivos em métricas de classificação \cite{zaghloul2024,10147542}.
+  \item Abordagens para desbalanceamento incluem reamostragem, ajuste de \emph{threshold} e penalização de classe, alinhadas ao que exploramos aqui (pesos de classe e otimização por \emph{recall}). \cite{dellaJustina2023}
 \end{itemize}
 
 \section{Metodologia}
@@ -267,9 +267,15 @@ Como análise complementar, foi aplicado K-Means sobre \emph{features} monetári
   \item \textbf{Seleção de features}: Aplicar técnicas de seleção de atributos para eliminar variáveis irrelevantes e redundantes.
   \item \textbf{Redução de dimensionalidade (PCA)}: Avaliar o uso de PCA para redução de dimensionalidade e ruído, assim como seu impacto no desempenho dos modelos.
   \item \textbf{Modelos}: GBDT para regressão, calibração de probabilidades, modelos hierárquicos por categoria/região.
-  \item \textbf{Métrica MAE}: Avaliar o uso do Erro Absoluto Médio (MAE) como métrica de desempenho para regressão, por ser menos sensível a \emph{outliers}.
   \item \textbf{Clustering}: validar com métricas internas (por exemplo, \emph{silhouette}) e cruzar \emph{clusters} com NPS/retorno.
 \end{itemize}
+
+\section{Disponibilidade de Códigos e dados}
+\begin{itemize}
+  \item O códig-fonte e os scripts utilizados nesse trabalho estão disponíveis em: \url{https://github.com/SidneyMelo/olistbr-ml2-final}
+\end{itemize}
+
+
 
 \bibliographystyle{abbrv}
 \bibliography{sbc-template}
