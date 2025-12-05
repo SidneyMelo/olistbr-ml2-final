@@ -1,0 +1,276 @@
+\documentclass[12pt]{article}
+
+\usepackage{sbc-template}
+\usepackage{graphicx,url}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{placeins}
+
+\sloppy
+
+\title{Determinantes de Satisfação no E-Commerce Brasileiro: Uma Análise sobre o Dataset Olist}
+
+\author{
+  Carlos Alberto Mota Da Silva Filho\inst{1},
+  Sidney Vitor Melo Do Nascimento\inst{1}
+}
+
+\address{
+  Universidade do Estado do Amazonas - UEA \\
+  Manaus -- AM -- Brasil \\
+  \email{camdsf.cid25@uea.edu.br, svmdn.cid25@uea.edu.br}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report presents machine-learning models for customer satisfaction prediction on the Olist dataset. We tackle binary classification (bad $\leq$ 2 vs good $\geq$ 4) and continuous regression (1--5). Stratified cross-validation and holdout evaluation are used, along with feature importance for interpretability. Random Forest and XGBoost achieve higher overall accuracy but low recall for the ``bad'' class; SVM/LogReg improve recall. Regression performance is modest ($R^2 \approx 0.15$). We outline limitations, future improvements, and a Streamlit app for interactive exploration and prediction.
+\end{abstract}
+
+\begin{resumo}
+Este relatório descreve a construção, avaliação e interpretação de modelos de aprendizado de máquina para prever a satisfação do cliente (\texttt{review\_score}) no conjunto de dados Olist. Implementamos duas frentes: classificação binária (ruim $\leq$ 2 vs bom $\geq$ 4) e regressão contínua (1--5). Utilizamos validação cruzada estratificada, holdout final e interpretabilidade via importância de atributos. Resultados mostram que Random Forest e XGBoost atingem maior acurácia geral, porém com baixo \emph{recall} da classe ``ruim''; SVM/LogReg equilibram melhor esse \emph{recall}. Em regressão, o desempenho é limitado ($R^2 \approx 0{,}15$). Discutimos limitações, melhorias futuras e o uso de um aplicativo Streamlit para visualização e predição interativa.
+\end{resumo}
+
+\section{Introdução}
+
+A satisfação do cliente é um elemento central para a competitividade no comércio eletrônico. Avaliações negativas podem sinalizar falhas na experiência de compra, afetar a reputação das plataformas e contribuir para a não fidelização do consumidor com as empresas. Nesse cenário, compreender os fatores que influenciam a percepção do consumidor tornou-se fundamental para empresas que buscam aprimorar processos logísticos, operacionais e de atendimento \cite{asawawibul2025custo}.
+
+O dataset público da Olist, amplamente utilizado em pesquisas acadêmicas e competições de ciência de dados, oferece uma oportunidade robusta para investigar determinantes de satisfação no e-commerce brasileiro. Reunindo informações sobre pedidos, entregas, pagamentos, produtos e avaliações, o conjunto de dados permite examinar como características do pedido, do produto e da logística se relacionam com a nota atribuída pelo cliente.
+
+Este trabalho tem como objetivo identificar os principais fatores associados à satisfação do consumidor e desenvolver modelos capazes de prever avaliações com base em atributos dos pedidos. São combinadas análises exploratórias, técnicas de aprendizado de máquina e métodos de agrupamento para revelar padrões relevantes e compreender como diferentes aspectos influenciam a percepção do usuário.
+
+\section{Descrição do Problema}
+
+A análise da satisfação do cliente no comércio eletrônico envolve múltiplos fatores que podem influenciar a percepção do consumidor sobre sua experiência de compra. No contexto do dataset Olist, o objetivo central é compreender como diferentes atributos do pedido, do produto e do processo logístico se relacionam com a nota atribuída no \textit{review}. 
+
+Dessa forma, esta pesquisa é guiada por quatro perguntas fundamentais:
+
+\begin{itemize}
+    \item \textbf{Quais características dos pedidos estão relacionadas a avaliações altas ou baixas (\texttt{review\_score})?} \\
+    Busca-se identificar atributos estruturais do pedido (valor, número de itens, tipo de pagamento, entre outros) que possam explicar variações na satisfação.
+
+    \item \textbf{O tempo entre a compra e a entrega (\texttt{order\_purchase\_timestamp}, \texttt{order\_delivered\_customer\_date}) afeta a nota do review?} \\
+    Avalia-se se atrasos ou adiantamentos logísticos têm impacto significativo na percepção do cliente.
+
+    \item \textbf{Existem categorias de produtos (\texttt{product\_category\_name}) associadas a maior insatisfação dos clientes?} \\
+    Busca-se identificar grupos de produtos que apresentam maior concentração de avaliações negativas.
+
+    \item \textbf{Clientes de determinadas regiões (\texttt{customer\_state}, \texttt{customer\_city}) avaliam de maneira mais positiva ou negativa?} \\
+    Examina-se se aspectos geográficos influenciam padrões de avaliação.
+\end{itemize}
+
+Com base nessas questões, o estudo combina análises exploratórias, técnicas de aprendizado de máquina e métodos de agrupamento para identificar determinantes de satisfação e avaliar a capacidade de modelos preditivos em antecipar avaliações negativas.
+
+\section{Base de dados}
+
+\begin{itemize}
+\item \textbf{Origem}: conjunto Olist (Kaggle \cite{kaggle-olist}), com tabelas de pedidos, itens, reviews, clientes, produtos e pagamentos.
+  \item \textbf{Consolidação}: a função \texttt{preprocess\_base} (\texttt{src/preprocessing.py}) gera um \emph{dataframe} por pedido, remove cancelados, agrega itens/pagamentos e traduz categorias.
+  \item \textbf{Targets}: a função \texttt{add\_targets} (\texttt{src/feature\_engineering.py}) cria \texttt{review\_binary}, \texttt{review\_positive} e \texttt{review\_negative}.
+\end{itemize}
+
+\noindent
+\textbf{Features usadas:}
+\begin{itemize}
+  \item \textbf{Numéricas} (imputação mediana, \emph{clip} 1--99\%, MinMax): \texttt{total\_items\_price}, \texttt{total\_freight\_value}, \texttt{payment\_installments}, \texttt{payment\_value}, \texttt{n\_items}, \texttt{delivery\_time\_days}, \texttt{estimated\_delivery\_days}, \texttt{delivery\_delay\_days}, \texttt{review\_count}.
+  \item \textbf{Categóricas} (imputação moda + OneHot): \texttt{payment\_type}, \texttt{customer\_state}, \texttt{product\_category\_name\_english}.
+\end{itemize}
+
+\noindent
+\textbf{Gráficos exploratórios} (script \texttt{01\_data\_overview.py}):
+
+\begin{itemize}
+  \item Distribuição de notas (Figura~\ref{fig:dist_notas}).
+  \item Pedidos por mês (Figura~\ref{fig:orders_month}).
+  \item Atraso versus nota (Figura~\ref{fig:delay_review}).
+  \item Análises por categoria e estado (Figura~\ref{fig:cats_states}).
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.60\textwidth]{images/review_score_distribution.png}
+\caption{Distribuição das notas de satisfação (\texttt{review\_score}).}
+\label{fig:dist_notas}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.60\textwidth]{images/orders_per_month.png}
+\caption{Número de pedidos por mês.}
+\label{fig:orders_month}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.60\textwidth]{images/delivery_delay_by_review_score.png}
+\caption{Relação entre atraso de entrega e nota do review.}
+\label{fig:delay_review}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\begin{minipage}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{images/categories_most_negative.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{images/states_most_negative.png}
+\end{minipage}
+\caption{Análises de insatisfação por categoria de produto (esquerda) e por estado (direita).}
+\label{fig:cats_states}
+\end{figure}
+
+\FloatBarrier
+\section{Trabalhos relacionados}
+
+\begin{itemize}
+  \item Estudos de previsão de satisfação em e-commerce têm utilizado principalmente modelos como \emph{random forest} e \emph{gradient boosting}, em dados de avaliações e atributos de pedidos, com resultados competitivos em métricas de classificação \cite{zaghloul2024}.
+  \item Abordagens para desbalanceamento incluem reamostragem, ajuste de \emph{threshold} e penalização de classe, alinhadas ao que exploramos aqui (pesos de classe e otimização por \emph{recall}).
+\end{itemize}
+
+\section{Metodologia}
+
+\subsection{Pré-processamento}
+
+\begin{itemize}
+  \item \emph{Clipping} de outliers nos quantis 1--99\%.
+  \item Imputação de faltantes.
+  \item Padronização das variáveis numéricas.
+  \item OneHot denso para variáveis categóricas.
+  \item Semente global fixa (\texttt{set\_global\_seed}) para reprodutibilidade.
+\end{itemize}
+
+\subsection{Modelagem}
+
+\begin{itemize}
+  \item \textbf{Classificação}: Naive Bayes (baseline), Regressão Logística (SGD), SVM linear, Random Forest, XGBoost.
+  \item \textbf{Regressão}: modelos Linear e Ridge (\texttt{SGDRegressor}).
+  \item \textbf{Hiperparâmetros}: \texttt{RandomizedSearchCV} opcional para Random Forest e XGBoost com métrica alvo \texttt{recall\_weighted}.
+  \item \textbf{Validação}: validação cruzada estratificada (3 \emph{folds}) para comparação preliminar e \emph{holdout} 80/20 estratificado para métricas finais.
+\end{itemize}
+
+\subsection{Avaliação}
+
+\begin{itemize}
+  \item \textbf{Métricas de classificação}: \emph{accuracy}, \emph{precision}/\emph{recall}/F1 (ponderadas e por classe), matrizes de confusão, importâncias de atributos.
+  \item \textbf{Métricas de regressão}: RMSE, $R^2$; gráficos de paridade e de resíduos para avaliar viés e dispersão das previsões.
+  \item \textbf{Visualizações principais}: as Figuras~\ref{fig:acc_barplot} a \ref{fig:feat_importance} ilustram o desempenho dos modelos de classificação e os atributos mais relevantes.
+\end{itemize}
+
+\section{Resultados}
+
+\subsection{Validação cruzada (3 folds)}
+
+A validação cruzada estratificada em 3 \emph{folds} foi utilizada para comparar modelos de classificação com base em métricas ponderadas (accuracy, precision, recall, F1). O heatmap de métricas (Figura~\ref{fig:cv_heatmap}) sintetiza o desempenho médio dos modelos, destacando \emph{Random Forest} e XGBoost com melhores resultados globais, enquanto Naive Bayes apresenta desempenho substancialmente inferior.
+
+\subsection{Holdout (20\%)}
+
+No conjunto de teste (holdout 20\%), as acurácias aproximadas foram: RF $\approx 0{,}893$, XGB $\approx 0{,}893$, SVM $\approx 0{,}80$, LogReg $\approx 0{,}76$ e NB $\approx 0{,}73$. A Figura~\ref{fig:acc_barplot} resume essa comparação. 
+
+Apesar da boa acurácia geral, a classe 0 (avaliações ruins) apresenta \emph{recall} baixo em RF/XGB ($\sim 0{,}32$), enquanto SVM e LogReg alcançam \emph{recall} maior ($\sim 0{,}57$--0{,}61$)$, ao custo de mais falsos positivos. A Figura~\ref{fig:confusion} mostra a matriz de confusão do modelo selecionado, evidenciando esse comportamento. A Figura~\ref{fig:feat_importance} apresenta as importâncias de atributos, destacando variáveis de tempo de entrega, valor do pedido e características de produto como determinantes relevantes.
+
+\begin{figure}[h]
+\centering
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{images/accuracy_barplot.png}
+    \caption{Acurácia dos modelos no conjunto de teste (holdout).}
+    \label{fig:acc_barplot}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{images/cv_metrics_heatmap.png}
+    \caption{Métricas em validação cruzada (heatmap).}
+    \label{fig:cv_heatmap}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{images/confusion_matrix_xgboost.png}
+    \caption{Matriz de confusão do modelo selecionado (XGBoost).}
+    \label{fig:confusion}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{images/feature_importance_best_model.png}
+    \caption{Importância das \emph{features} no melhor modelo.}
+    \label{fig:feat_importance}
+\end{minipage}
+\end{figure}
+
+\subsection{Regressão}
+
+Na tarefa de regressão para prever \texttt{review\_score} na escala de 1 a 5, os modelos Linear e Ridge apresentaram RMSE em torno de 1{,}23 e $R^2 \approx 0{,}15$, indicando capacidade limitada de explicar a variabilidade das notas. As análises de paridade e de resíduos mostram concentração em torno da média, com achatamento nas pontas e viés nas extremidades (tendência a superestimar notas muito baixas e subestimar notas muito altas), sugerindo que as \emph{features} tabulares disponíveis não são suficientes para capturar nuances da percepção de satisfação.
+
+\subsection{Clustering (diagnóstico)}
+
+Como análise complementar, foi aplicado K-Means sobre \emph{features} monetárias e de tempo, após transformações com \texttt{log1p} e \emph{winsorização} 1--99\%. Três \emph{clusters} principais foram identificados: (i) pedidos de baixo valor, com entrega adiantada e maior média de \emph{review}; (ii) pedidos de valor médio--alto, com um produto e entrega adiantada; e (iii) pedidos com múltiplos produtos e valores intermediários, associados a avaliações ligeiramente piores. Esses grupos fornecem indícios de segmentação útil, ainda que sem validação externa formal.
+
+\section{Discussão}
+
+\begin{itemize}
+  \item \textbf{Trade-off entre \emph{recall} e acurácia}: RF/XGB otimizam acurácia geral, mas perdem avaliações ``ruins''; SVM/LogReg recuperam mais casos críticos ao custo de mais falsos positivos.
+  \item \textbf{Desbalanceamento}: métricas ponderadas refletem a dominância da classe positiva. Ajuste de pesos e \emph{threshold} é essencial para o objetivo de negócio.
+  \item \textbf{Regressão limitada}: o baixo $R^2$ indica que as \emph{features} atuais não capturam bem a variabilidade das notas; é útil como diagnóstico, não como predição fina.
+  \item \textbf{Interpretabilidade}: importâncias apontam que atraso de entrega, valores monetários e categoria influenciam a predição; matrizes de confusão mostram onde o modelo erra (FP/FN).
+\end{itemize}
+
+\section{Comparação com resultados existentes}
+
+\begin{itemize}
+  \item Trabalhos públicos com Olist (Kaggle/competições) reportam bons resultados com modelos de árvore/boosting para classificação; nossos resultados são consistentes (acurácia $\sim 0{,}89$), mas evidenciam a mesma dificuldade em \emph{recall} da classe minoritária.
+  \item Em regressão, valores baixos de $R^2$ também aparecem em estudos correlatos, reforçando a dificuldade de prever a nota exata sem \emph{features} adicionais (como texto de reviews ou histórico detalhado).
+\end{itemize}
+
+\section{Limitações}
+
+\begin{itemize}
+  \item Desbalanceamento forte, mitigado apenas parcialmente com pesos/\emph{threshold}; não exploramos reamostragem nem custos customizados no \emph{holdout} final.
+  \item \emph{Features} limitadas à base tabular; ausência de texto dos reviews e histórico detalhado de clientes/produtos.
+  \item Regressão restrita a modelos lineares; não avaliamos GBDT regressivos ou redes neurais.
+  \item Clustering exploratório sem validação externa (apenas interpretação descritiva).
+\end{itemize}
+
+\section{Conclusões}
+
+\begin{itemize}
+  \item Modelos de classificação atingem alta acurácia, mas o \emph{recall} da classe ``ruim'' permanece o principal desafio.
+  \item SVM/LogReg são preferíveis quando o custo de perder insatisfeitos é alto; RF/XGB são mais interessantes quando se prioriza acerto geral.
+  \item Regressão não captura bem a variabilidade das notas ($R^2 \approx 0{,}15$); é mais adequada para sinalizar tendência central do que para predição exata.
+  \item Ferramentas de interpretação (importâncias, matrizes de confusão) e o app Streamlit facilitam a comunicação dos resultados para stakeholders.
+\end{itemize}
+
+\section{Respostas às perguntas de negócio}
+
+\begin{itemize}
+  \item \textbf{Quais características se relacionam a avaliações altas/baixas?} As importâncias do melhor modelo (Figura~\ref{fig:feat_importance}) destacam atraso de entrega, valores monetários e características de produto como principais \emph{drivers} de \texttt{review\_binary}, em linha com os padrões observados nos gráficos exploratórios.
+  \item \textbf{Tempo entre compra e entrega afeta a nota?} Sim. A relação entre atraso e nota (Figura~\ref{fig:delay_review}) indica queda significativa na média de \texttt{review\_score} quando há atraso na entrega, e variáveis de tempo aparecem entre as mais importantes no modelo.
+  \item \textbf{Categorias com maior insatisfação?} A Figura~\ref{fig:cats_states} (painel de categorias) e as estatísticas associadas evidenciam grupos de produtos com maior concentração de notas $\leq 2$, sugerindo segmentos críticos para intervenção.
+  \item \textbf{Regiões mais positivas/negativas?} A Figura~\ref{fig:cats_states} (painel de estados) mostra diferenças entre unidades federativas, com alguns estados apresentando maior proporção de avaliações negativas, o que reforça o papel de \texttt{customer\_state} como \emph{feature} relevante.
+\end{itemize}
+
+\section{Melhorias futuras}
+
+\begin{itemize}
+  \item \textbf{Balanceamento avançado}: SMOTE/undersampling e custo customizado por classe; escolha de \emph{threshold} via curva \emph{precision-recall}.
+  \item \textbf{Otimização de Hiperparâmetros}: Utilizar Optuna para otimização de hiperparâmetros.
+  \item \textbf{Novas features}: texto do review, histórico de compras/entregas, sazonalidade, interação produto--categoria.
+  \item \textbf{Seleção de features}: Aplicar técnicas de seleção de atributos para eliminar variáveis irrelevantes e redundantes.
+  \item \textbf{Redução de dimensionalidade (PCA)}: Avaliar o uso de PCA para redução de dimensionalidade e ruído, assim como seu impacto no desempenho dos modelos.
+  \item \textbf{Modelos}: GBDT para regressão, calibração de probabilidades, modelos hierárquicos por categoria/região.
+  \item \textbf{Métrica MAE}: Avaliar o uso do Erro Absoluto Médio (MAE) como métrica de desempenho para regressão, por ser menos sensível a \emph{outliers}.
+  \item \textbf{Clustering}: validar com métricas internas (por exemplo, \emph{silhouette}) e cruzar \emph{clusters} com NPS/retorno.
+\end{itemize}
+
+\bibliographystyle{abbrv}
+\bibliography{sbc-template}
+\end{document}
