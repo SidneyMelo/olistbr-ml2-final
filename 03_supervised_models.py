@@ -110,11 +110,6 @@ def main() -> None:
 
     # Construir preprocessor (StandardScaler + OneHotEncoder)
     preprocessor_template = build_preprocessor(numeric_features, categorical_features)
-
-    # ============================================================
-    # 1.1) Validação cruzada estratificada para comparação inicial
-    # ============================================================
-    print("\n🔁 Rodando validação cruzada estratificada (3 folds)...")
     cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
     scoring = {
         "accuracy": "accuracy",
@@ -187,6 +182,7 @@ def main() -> None:
         )
         return summary
 
+
     def run_random_search(
         name: str,
         base_estimator,
@@ -222,15 +218,25 @@ def main() -> None:
         )
         return search.best_estimator_, search.best_params_, search.best_score_
 
+    # Dividir em treino/teste
+    tt = split_train_test(X, y, test_size=0.2, random_state=42, stratify=True)
+    print("\nDivisão treino/teste realizada.")
+    print(f"Treino: {tt.X_train.shape[0]} linhas")
+    print(f"Teste : {tt.X_test.shape[0]} linhas")
+
+    # ============================================================
+    # 1.1) Validação cruzada (apenas nos 80% de treino)
+    # ============================================================
+    print("\n🔁 Rodando validação cruzada estratificada (3 folds) apenas no conjunto de treino...")
     cv_results = {}
     cv_results["naive_bayes"] = run_cross_validation(
         "Naive Bayes",
         GaussianNB(var_smoothing=1e-4),
-        X,
-        y,
+        tt.X_train,
+        tt.y_train,
         add_stabilizer=True,
         variance_threshold=1e-4,
-        sample_limit=100000, # limitar amostra para NB
+        sample_limit=100000,  # limitar amostra para NB
         n_jobs_cv=1,  # serial para evitar explosão numérica/memória no NB
     )
     cv_results["logistic_regression"] = run_cross_validation(
@@ -247,22 +253,22 @@ def main() -> None:
             n_jobs=-1,
             class_weight="balanced",
         ),
-        X,
-        y,
+        tt.X_train,
+        tt.y_train,
     )
     cv_results["random_forest"] = run_cross_validation(
         "Random Forest",
         RandomForestClassifier(n_estimators=200, random_state=42, n_jobs=-1),
-        X,
-        y,
+        tt.X_train,
+        tt.y_train,
     )
 
     # Para o SVM, amostrar se a base for grande para manter tempo de execução razoável
-    X_svm_cv = X
-    y_svm_cv = y
-    if len(X) > SVM_MAX_TRAIN_SAMPLES:
-        X_svm_cv = X.sample(n=SVM_MAX_TRAIN_SAMPLES, random_state=42)
-        y_svm_cv = y.loc[X_svm_cv.index]
+    X_svm_cv = tt.X_train
+    y_svm_cv = tt.y_train
+    if len(tt.X_train) > SVM_MAX_TRAIN_SAMPLES:
+        X_svm_cv = tt.X_train.sample(n=SVM_MAX_TRAIN_SAMPLES, random_state=42)
+        y_svm_cv = tt.y_train.loc[X_svm_cv.index]
         print(f"   > Usando amostra de {len(X_svm_cv)} linhas para SVM na CV (limite: {SVM_MAX_TRAIN_SAMPLES})")
 
     cv_results["svm_linear"] = run_cross_validation(
@@ -335,12 +341,6 @@ def main() -> None:
         plt.savefig(cv_plot_file, dpi=120)
         plt.close()
         print("📈 Heatmap de CV salvo em:", cv_plot_file.resolve())
-
-    # Dividir em treino/teste
-    tt = split_train_test(X, y, test_size=0.2, random_state=42, stratify=True)
-    print("\nDivisão treino/teste realizada.")
-    print(f"Treino: {tt.X_train.shape[0]} linhas")
-    print(f"Teste : {tt.X_test.shape[0]} linhas")
 
     # ============================================================
     # 2) Treinar modelos
